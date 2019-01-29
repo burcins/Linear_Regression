@@ -1,0 +1,230 @@
+---
+title: "Assignment_2"
+author: "Burcin_Sarac_FT18"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo=FALSE, message=FALSE}
+setwd("E:/dersler/Statistics 1/assignment 4")
+library(tidyverse)
+library(psych)
+library(corrplot)
+library(car)
+library(glmnet)
+library(lmtest)
+```
+
+## Q1
+
+I began with reading the data in R and check the structure of it;
+```{r, echo=TRUE}
+usdata <- read.table("usdata")
+str(usdata)
+summary(usdata)
+```
+
+The dataset includes 63 observations and 6 variables. It seems from str() command that, all variables are integers. And from summary of data, all variables seems to variate in a normal distance, mean and median values are closely located and there is not seen any extreme values from min and max values. 
+
+## Q2
+
+
+```{r, echo=TRUE}
+numvar <- c("PRICE", "SQFT", "AGE", "FEATS")
+boolvar <- c("NE", "COR")
+usdata[,numvar] <- apply(usdata[,numvar], 2, function(x) as.numeric(x))
+usdata[,boolvar] <- apply(usdata[,boolvar], 2, function(x) as.factor(x))
+usnum <- usdata[numvar]
+usfac <- usdata[boolvar]
+str(usdata)
+
+```
+
+
+## Q3
+
+For analyzing each variable, firstly I started with numerical variables. 
+
+```{r, echo=TRUE}
+round(t(describe(usdata[1:4])),2)
+par(mfrow=c(2,2))
+for(i in 1:3){
+  hist(usdata[,i], main=names(usdata)[i], xlab = names(usdata)[i])
+}
+n <- nrow(usdata)
+plot(table(usdata[,4])/n, type='h', xlim=range(usdata[,4])+c(-1,1), main=names(usdata)[4], ylab='Relative frequency')
+```
+
+From generated codes and graphs it could be seen that, the numeric variables are not symetrically distributed. According to mean and median values and histograms we may roughly say that PRICE, SQFT have right skewed distribution and AGE has left skewed distribution. FEATS variable's distribution cannot understood from graph clearly, however it can determined by its "skew" value that it has right skewed distribution too. 
+After that, I checked below the boolian variables(which were determined as factors in our dataset);
+
+
+```{r, echo=TRUE}
+for(i in 5:6){
+  tbl= table(usdata[i])
+  tbl = cbind(tbl,round(prop.table(tbl),2))
+  colnames(tbl) <- c(names(usdata)[i], "prob")
+  print(tbl)
+}
+par(mfrow=c(1,1))
+barplot(sapply(usfac,table)/n, col=4:8)
+legend('topright', fil=4:8, legend=c('No','Yes'), ncol=2)
+```
+
+
+As it can be seen from tables that, in FEATS data about 70 percent of its variables are generated from 3-4. And around 62% of houses located in North East sector of the city and 22% of 63 houses are located in corner of a street. 
+
+## Q4
+
+In this question, I tried to analyze numeric data in terms of correlations and visualization of bivariate associations;
+
+```{r, echo=TRUE}
+pairs(usnum)
+par(mfrow=c(1,1))
+corrplot(cor(usnum), method = "number")
+par(mfrow=c(1,3))
+for(i in 2:4){
+  plot(usnum[,i], usnum[,1], xlab=names(usnum)[i], ylab='Price')
+  abline(lm(usnum[,1]~usnum[,i]))
+}
+par(mfrow=c(1,3))
+for(i in 2:4){
+  boxplot(usnum[,1]~ usnum[,i], xlab=names(usnum)[i], ylab='Price')
+  abline(lm(usnum[,1]~usnum[,i]))
+}
+par(mfrow=c(1,2))
+for(i in 1:2){
+  boxplot(usnum[,1]~usfac[,i], xlab=names(usfac)[i], ylab='Price')
+  abline(lm(usnum[,1]~usfac[,i]))
+}
+```
+
+Firstly, I visualize the association between numeric variables and response variable. It seems that, PRICE has clear and strong positive linear relationship with SQFT and weaker but still positive linear relationship with FEATS variables. However, it is difficult to say something about relationship between PRICE and AGE from graphs. Therefore, correlation plot also supports the relationships just mentioned. Additionally it can be said that PRICE has weak negative linear relationship with AGE variable. And PRICE has close to perfect positive linear relationship with SQFT with 0.93. Moreover boxplots also supports the descriptions above about relations with ablines. 
+Addition to this, the boolian variables can be assessed from boxplots. The NE variable has positive linear relation with PRICE but COR has negative.
+By the way for explaining, if there is a positive linear relationship determined between variables, like PRICE vs SQFT, this means if SQFT increases it causes to increase in PRICE as well. 
+
+## Q5
+
+```{r, echo=TRUE}
+model <- lm(PRICE~.,usdata)
+summary(model)
+anova(model)
+```
+
+After fitting a multiple linear regression model which includes all variables as predictors except PRICE as response variable, the fitted model has 86.4% adjusted R^2. If I only take into account this value, it can be said that the predictors would expain PRICE level with 86% accuracy. However, only taking into account R^2 may causes wrong interpretations, it cannot be trustworthy alone to explain model. 
+Moreover, it can be seen from summary that, only SQFT,FEATS variables and constant variable seem significant in 95% confidence level. And the analysis of variance(anova) also supports our decision with testing the significance of each covariate using F-Tests. The p-values of predictors should be less than the selected confidence level for significance(<0.05). 
+
+
+## Q6
+
+
+```{r, echo=TRUE}
+mnull <- lm(PRICE~1,usdata)
+step(mnull, scope=list(lower=mnull,upper=model), direction='forward')
+step(model, direction='back')
+```
+
+In this command, I tried to find best model for predicting PRICE with both backward and forward procedure. I firstly created a null model only included the constant variable. And I defined the scope of implemented method from null model to full, which included all variables. With the helps of this I aimed to test the model with all variables without any missing predictor. 
+It resulted with a model only used SQRT and FEATS varibles as predictors and it determined from min AIC variable as 628.84.  
+
+
+## Q7
+
+
+```{r, echo=TRUE}
+modelf <- lm(PRICE~SQFT+FEATS, usdata)
+summary(modelf)
+```
+
+After determining my model with only variables SQFT and FEATS, I created modelf for final model. And from summary of my final model, the adjusted R^2 equals to 0.8661 and all my coefficients and constant variable seems significant from their p-values, which are lower than 0.05 significance level. With this result my model become;
+
+PRICE = -175.93 + 0.68xSQFT + 39.84xFEATS + E
+E~N(0,143.7^2)
+
+The intercept variable may be thought as fixed value added to the Price of a house. However, according to the constant with the value -175.93, I should assume if there is a house without any FEATS and SQFT, its PRICE should be -175.93. In other words the constant variable is not meaningful as a negative number and should be removed. 
+
+
+```{r, echo=TRUE}
+modelf2 <- lm(PRICE~SQFT+FEATS-1, usdata)
+summary(modelf2)
+```
+
+
+After removing the constant the adjusted R^2 become 0.9851 and still coefficients seem significant. So the last model should be like this;
+
+PRICE = 0.68xSQFT + 39.84xFEATS + E
+E~N(0,149^2)
+
+## Q8
+
+
+If model assumptions are not met, the model used for regression analysis may not be valid and it may cause to draw wrong conclusions and to make uneffective decisions. 
+
+```{r, echo=TRUE}
+par(mfrow=c(1,1))
+plot(modelf2, which = 2)
+Stud.residuals <- rstudent(modelf2)
+yhat <- fitted(modelf2)
+par(mfrow=c(1,2))
+plot(yhat, Stud.residuals)
+abline(h=c(-2,2), col=2, lty=2)
+plot(yhat, Stud.residuals^2)
+abline(h=4, col=2, lty=2)
+
+ncvTest(modelf2)
+yhat.quantiles<-cut(yhat, breaks=quantile(yhat, probs=seq(0,1,0.25)), dig.lab=6)
+table(yhat.quantiles)
+leveneTest(rstudent(modelf2)~yhat.quantiles)
+boxplot(rstudent(modelf2)~yhat.quantiles)
+residualPlot(modelf2, type='rstudent')
+residualPlots(modelf2, plot=F, type = "rstudent")
+par(mfrow=c(1,1))
+plot(rstudent(modelf2), type='l')
+dwtest(modelf2)
+durbinWatsonTest(modelf2)
+```
+
+
+However, as it seems from graphs, both normality and homoscedasticity assumptions do not met. Because residuals in QQPlot don't seem normally distributed and they distributed like a funnel starts with low variance and getting higher. And also p-value in Non-constant variance score test and Levene's Test for Homogenity were above my confidence level(0.05). It ensures me that my model has also heteroscedasticity problem. And from the graph I can easily say that there is a linearity problem as well. However it seems from DW test results that, the predictors are independent.
+
+For fixing this problem, one mostly used solution is to transform response variable and also predictors. And then it is needed to check the assumptions again.
+
+
+```{r, echo=TRUE}
+round(vif(model),1)
+round(vif(modelf2),1)
+```
+
+
+At last I checked multicollinearity both in my very beginning model with all variables and also my last model. From the querries, it can be seen that there was not any multicollinearity problem in any coefficient. I checked it with this formula and the VIF value in my last model is;
+VIF = (1-R^2)^-1 = 66.67
+And according to my VIF value, none of the coefficients got higher values than VIF value. 
+
+
+## Q9
+
+
+```{r, echo=TRUE}
+X <- model.matrix(model)[,-1]
+lasso <- glmnet(X, usdata$PRICE)
+lasso1 <- cv.glmnet(X, usdata$PRICE, alpha = 1)
+lasso1$lambda
+lasso1$lambda.min
+lasso1$lambda.1se
+plot(lasso1)
+coef(lasso1, s = "lambda.min")
+coef(lasso1, s = "lambda.1se")
+plot(lasso1$glmnet.fit, xvar = "lambda")
+abline(v=log(c(lasso1$lambda.min, lasso1$lambda.1se)), lty =2)
+```
+
+
+The Lasso technique also ended up with same variables(SQRT,FEATS) as determined in the stepwise method, according to determined lambda(lambda.1se). Lambda.1se is calculated with; 1 standard error + min lambda and I prefer to use this lambda value because of decreasing error and avoid overfitting. And in this lambda level the  "coef(lasso1, s = "lambda.1se")" querry shows me the most important last 2 predictors as SQFT and FEATS.
+
+
+
+
+
